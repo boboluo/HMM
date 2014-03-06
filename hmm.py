@@ -252,9 +252,17 @@ class HMM:
 
 if __name__ == '__main__':
     hmm = HMM('123', '23')
-    # hmm.initWithSetting([1, 0, 0], [[0, 0.5, 0.5], [0, 0.9, 0.1], [0, 0, 1]], [[0.5, 0.5], [0.9, 0.1], [0.1, 0.9]])
-    hmm.initWithData(['123212321'], ['23232323'])
+
+    # Initializing with setting parameters
+    hmm.initWithSetting([1, 0, 0], [[0, 0.5, 0.5], [0, 0.9, 0.1], [0, 0, 1]], [[0.5, 0.5], [0.9, 0.1], [0.1, 0.9]])
+    # or with train data
+    # hmm.initWithData(['123212321'], ['23232323'])
+
     hmm.printModel()
+
     print hmm.decode('233222323')
     print hmm.decode('23322232')
     print hmm.predict('23322232', 1)
+
+    hmm.polish('233222323')
+    hmm.printModel()
