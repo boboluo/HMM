@@ -39,6 +39,10 @@ class HMM:
             model['init'][self.states_dict[states[-1]]] += 1
             model['emit'][self.states_dict[states[-1]]][self.observations_dict[observations_list[i][-1]]] += 1
 
+        model['init'] = HMM.laplaceSmoothing(model['init'])
+        model['trans'] = HMM.laplaceSmoothing(model['trans'])
+        model['emit'] = HMM.laplaceSmoothing(model['emit'])
+
         HMM.normalize(model['init'])
         HMM.normalizeMatrix(model['trans'])
         HMM.normalizeMatrix(model['emit'])
@@ -214,6 +218,16 @@ class HMM:
         return index
 
     @staticmethod
+    def laplaceSmoothing(obj, k = 3):
+        obj_type = type(obj);
+        if int == obj_type or float == obj_type:
+            return obj + k
+        elif list == obj_type:
+            for i in range(len(obj)):
+                obj[i] = HMM.laplaceSmoothing(obj[i], k)
+            return obj
+
+    @staticmethod
     def normalize(vector):
         total = 0.0
         for each in vector:
@@ -251,18 +265,22 @@ class HMM:
         print ']'
 
 if __name__ == '__main__':
-    hmm = HMM('123', '23')
+    hmm = HMM('-o', '._o')
 
-    # Initializing with setting parameters
-    hmm.initWithSetting([1, 0, 0], [[0, 0.5, 0.5], [0, 0.9, 0.1], [0, 0, 1]], [[0.5, 0.5], [0.9, 0.1], [0.1, 0.9]])
+    # initializing with setting parameters
+    # hmm.initWithSetting([1, 0, 0], [[0, 0.5, 0.5], [0, 0.9, 0.1], [0, 0, 1]], [[0.5, 0.5], [0.9, 0.1], [0.1, 0.9]])
     # or with train data
-    # hmm.initWithData(['123212321'], ['23232323'])
+    hmm.initWithData(['------ooooooooo------'], ['...___ooo___ooo___...'])
 
+    # decode
+    print hmm.decode('._._._._ooooo_._ooooo_._._._.')
+
+    # polish
+    hmm.polish('._._._._ooooo_._ooooo_._._._.')
+    print hmm.decode('._._._._ooooo_._ooooo_._._._.')
+
+    # print the mode
     hmm.printModel()
 
-    print hmm.decode('233222323')
-    print hmm.decode('23322232')
-    print hmm.predict('23322232', 1)
-
-    hmm.polish('233222323')
-    hmm.printModel()
+    # predict
+    # print hmm.predict('._._._._ooooo_._ooooo_._._._.', 2)
