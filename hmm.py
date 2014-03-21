@@ -1,3 +1,5 @@
+import numpy as np
+
 class HMM:
 
     def __init__(self, states, observations):
@@ -19,13 +21,15 @@ class HMM:
         return model
 
     def initWithSetting(self, init, trans, emit):
-        self.model_list.append(HMM.createModel(init, trans, emit))
+        self.model_list.append(HMM.createModel(np.array(init), np.array(trans), np.array(emit)))
         self.model_list_index = 0
 
     def initWithData(self, states_list, observations_list):
-        model = HMM.createModel(HMM.createList(self.states_size),
-            HMM.createMatrix(self.states_size, self.states_size),
-            HMM.createMatrix(self.states_size, self.observations_size))
+        model = HMM.createModel(
+            np.zeros(self.states_size,),
+            np.zeros((self.states_size, self.states_size)),
+            np.zeros((self.states_size, self.observations_size))
+            )
 
         for i in range(len(states_list)):
             states = states_list[i]
@@ -39,9 +43,9 @@ class HMM:
             model['init'][self.states_dict[states[-1]]] += 1
             model['emit'][self.states_dict[states[-1]]][self.observations_dict[observations_list[i][-1]]] += 1
 
-        model['init'] = HMM.laplaceSmoothing(model['init'])
-        model['trans'] = HMM.laplaceSmoothing(model['trans'])
-        model['emit'] = HMM.laplaceSmoothing(model['emit'])
+        HMM.laplaceSmoothing(model['init'])
+        HMM.laplaceSmoothing(model['trans'])
+        HMM.laplaceSmoothing(model['emit'])
 
         HMM.normalize(model['init'])
         HMM.normalizeMatrix(model['trans'])
@@ -56,10 +60,10 @@ class HMM:
     def calculateA(self, observations):
         model = self.getCurrentModel()
         length = len(observations)
-        matrix_a = HMM.createMatrix(length, self.states_size)
+        matrix_a = np.zeros((length, self.states_size))
 
         for state in range(self.states_size):
-            matrix_a[0][state] = model['init'][state] * model['emit'][state][self.observations_dict[observations[0]]]
+            matrix_a[0, state] = model['init'][state] * model['emit'][state][self.observations_dict[observations[0]]]
         HMM.normalize(matrix_a[0])
         for obs_idx in range(1, length):
             for to_state in range(self.states_size):
@@ -72,7 +76,7 @@ class HMM:
     def calculateB(self, observations):
         model = self.getCurrentModel()
         length = len(observations)
-        matrix_b = HMM.createMatrix(length, self.states_size)
+        matrix_b = np.zeros((length, self.states_size))
 
         for state in range(self.states_size):
             matrix_b[length - 1][state] = 1.0
@@ -89,7 +93,7 @@ class HMM:
         matrix_a = self.calculateA(observations)
         matrix_b = self.calculateB(observations)
         length = len(observations)
-        matrix_c = HMM.createMatrix(length, self.states_size)
+        matrix_c = np.zeros((length, self.states_size))
         for obs_idx in range(length):
             for state_idx in range(self.states_size):
                 matrix_c[obs_idx][state_idx] = matrix_a[obs_idx][state_idx] * matrix_b[obs_idx][state_idx]
@@ -106,13 +110,13 @@ class HMM:
         model = self.getCurrentModel()
         prob = self.calculateA(observations)[-1]
         for s in range(step):
-            prob_next = HMM.createList(self.states_size)
+            prob_next = np.zeros(self.states_size)
             for i in range(self.states_size):
                 for j in range(self.states_size):
                     prob_next[i] += prob[j] * model['trans'][j][i]
             HMM.normalize(prob_next)
             prob = prob_next
-        return self.states[HMM.getMaxIndex(prob)]
+        return self.states[np.argmax(prob)]
 
     def decode(self, observations):
         model = self.getCurrentModel()
@@ -138,27 +142,27 @@ class HMM:
             state_prob = state_prob_next
             state_decode = state_decode_next
             HMM.normalize(state_prob)
-        return state_decode[HMM.getMaxIndex(state_prob)]
+        return state_decode[np.argmax(state_prob)]
 
     def polish(self, observations):
         model = self.getCurrentModel()
         matrix_a, matrix_b, matrix_c = self.calculateObsProbMatrixs(observations)
         length = len(observations)
-        state_trans_cube = HMM.createCube(length - 1, self.states_size, self.states_size)
+        state_trans_cube = np.zeros((length - 1, self.states_size, self.states_size))
         for obs_idx in range(length - 1):
             for from_state in range(self.states_size):
                 for to_state in range(self.states_size):
                     state_trans_cube[obs_idx][from_state][to_state] = matrix_a[obs_idx][from_state] * model['trans'][from_state][to_state] * model['emit'][to_state][self.observations_dict[observations[obs_idx + 1]]] * matrix_b[obs_idx + 1][to_state]
         HMM.normalizeCube(state_trans_cube)
 
-        new_trans = HMM.createMatrix(self.states_size, self.states_size)
+        new_trans = np.zeros((self.states_size, self.states_size))
         for i in range(self.states_size):
             for j in range(self.states_size):
                 for k in range(length - 1):
                     new_trans[i][j] += state_trans_cube[k][i][j]
         HMM.normalizeMatrix(new_trans)
 
-        new_emit = HMM.createMatrix(self.states_size, self.observations_size)
+        new_emit = np.zeros((self.states_size, self.observations_size))
         for i in range(self.states_size):
             for j in range(self.observations_size):
                 for k in range(length):
@@ -174,11 +178,12 @@ class HMM:
         print 'Observations:', self.observations
         for each in self.model_list:
             print '--------Model--------'
-            print 'Pi:', each['init']
+            print 'Pi:'
+            print each['init']
             print 'Trans:'
-            HMM.printMatrix(each['trans'])
+            print each['trans']
             print 'Emit:'
-            HMM.printMatrix(each['emit'])
+            print each['emit']
             print '---------------------'
 
     @staticmethod
@@ -189,51 +194,14 @@ class HMM:
         return flag_dict
 
     @staticmethod
-    def createList(n):
-        vector = []
-        for i in range(n):
-            vector.append(0)
-        return vector
-
-    @staticmethod
-    def createMatrix(n, m):
-        matrix = []
-        for i in range(n):
-            matrix.append(HMM.createList(m))
-        return matrix
-
-    @staticmethod
-    def createCube(n, m, l):
-        cube = []
-        for i in range(n):
-            cube.append(HMM.createMatrix(m, l))
-        return cube
-
-    @staticmethod
-    def getMaxIndex(vector):
-        index = 0
-        for i in range(len(vector)):
-            if vector[i] > vector[index]:
-                index = i
-        return index
-
-    @staticmethod
     def laplaceSmoothing(obj, k = 3):
-        obj_type = type(obj);
-        if int == obj_type or float == obj_type:
-            return obj + k
-        elif list == obj_type:
-            for i in range(len(obj)):
-                obj[i] = HMM.laplaceSmoothing(obj[i], k)
-            return obj
+        obj += 3
 
     @staticmethod
     def normalize(vector):
-        total = 0.0
-        for each in vector:
-            total += each
-        length = len(vector)
+        total = np.sum(vector)
         if total != 0:
+            length = len(vector)
             for i in range(length):
                 vector[i] /= total
         # else:
@@ -250,25 +218,15 @@ class HMM:
         for each in cube:
             HMM.normalizeMatrix(each)
 
-    @staticmethod
-    def printMatrix(matrix, indent = 1):
-        print ' ' * ((indent - 1) * 4) + '['
-        for each in matrix:
-            print ' ' * (4 * indent) + str(each)
-        print ' ' * ((indent - 1) * 4) + ']'
-
-    @staticmethod
-    def printCube(cube):
-        print '['
-        for each in cube:
-            HMM.printMatrix(each, 2)
-        print ']'
-
 if __name__ == '__main__':
     hmm = HMM('-o', '._o')
 
     # initializing with setting parameters
-    # hmm.initWithSetting([1, 0, 0], [[0, 0.5, 0.5], [0, 0.9, 0.1], [0, 0, 1]], [[0.5, 0.5], [0.9, 0.1], [0.1, 0.9]])
+    # hmm.initWithSetting(
+    #     [0.5, 0.5],
+    #     [[0.9, 0.1], [0.1, 0.9]],
+    #     [[1, 1, 1], [1, 1, 1]],
+    #     )
     # or with train data
     hmm.initWithData(['------ooooooooo------'], ['...___ooo___ooo___...'])
 
