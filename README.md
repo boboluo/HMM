@@ -1,4 +1,4 @@
 HMM
 ===
 
-A Python HMM code.
+A Python HMM (Hidden Markove Model) code.
