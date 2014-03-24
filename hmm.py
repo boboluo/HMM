@@ -1,3 +1,4 @@
+import math
 import numpy as np
 
 class HMM:
@@ -9,20 +10,16 @@ class HMM:
         self.observations = observations
         self.observations_size = len(observations)
         self.observations_dict = HMM.extractFlagStr(observations)
-        self.model_list = []
-        self.model_list_index = -1
-
-    @staticmethod
-    def createModel(init, trans, emit):
-        model = {}
-        model['init'] = init
-        model['trans'] = trans
-        model['emit'] = emit
-        return model
+        self.initModelList()
 
     def initWithSetting(self, init, trans, emit):
-        self.model_list.append(HMM.createModel(np.array(init), np.array(trans), np.array(emit)))
-        self.model_list_index = 0
+        self.addModel(
+            HMM.createModel(
+                HMM.normalize(np.array(init)),
+                HMM.normalize(np.array(trans)),
+                HMM.normalize(np.array(emit)),
+            )
+        )
 
     def initWithData(self, states_list, observations_list):
         model = HMM.createModel(
@@ -48,14 +45,31 @@ class HMM:
         HMM.laplaceSmoothing(model['emit'])
 
         HMM.normalize(model['init'])
-        HMM.normalizeMatrix(model['trans'])
-        HMM.normalizeMatrix(model['emit'])
+        HMM.normalize(model['trans'])
+        HMM.normalize(model['emit'])
 
+        self.addModel(model)
+
+
+    @staticmethod
+    def createModel(init, trans, emit):
+        model = {}
+        model['init'] = init
+        model['trans'] = trans
+        model['emit'] = emit
+        return model
+
+    def initModelList(self):
+        self.model_list = []
+        self.model_list_index = -1
+
+    def addModel(self, model):
         self.model_list.append(model)
-        self.model_list_index = 0
+        self.model_list_index += 1
 
     def getCurrentModel(self):
         return self.model_list[self.model_list_index]
+
 
     def calculateA(self, observations):
         model = self.getCurrentModel()
@@ -97,8 +111,9 @@ class HMM:
         for obs_idx in range(length):
             for state_idx in range(self.states_size):
                 matrix_c[obs_idx][state_idx] = matrix_a[obs_idx][state_idx] * matrix_b[obs_idx][state_idx]
-        HMM.normalizeMatrix(matrix_c)
+        HMM.normalize(matrix_c)
         return matrix_a, matrix_b, matrix_c
+
 
     def filter(self, observations):
         pass
@@ -138,11 +153,13 @@ class HMM:
                         prob = prob_tmp
                         pre = from_state
                 state_prob_next.append(prob * model['emit'][to_state][self.observations_dict[each_obs]])
+
                 state_decode_next.append(state_decode[pre] + self.states[to_state])
             state_prob = state_prob_next
             state_decode = state_decode_next
             HMM.normalize(state_prob)
         return state_decode[np.argmax(state_prob)]
+
 
     def polish(self, observations):
         model = self.getCurrentModel()
@@ -153,14 +170,14 @@ class HMM:
             for from_state in range(self.states_size):
                 for to_state in range(self.states_size):
                     state_trans_cube[obs_idx][from_state][to_state] = matrix_a[obs_idx][from_state] * model['trans'][from_state][to_state] * model['emit'][to_state][self.observations_dict[observations[obs_idx + 1]]] * matrix_b[obs_idx + 1][to_state]
-        HMM.normalizeCube(state_trans_cube)
+        HMM.normalize(state_trans_cube)
 
         new_trans = np.zeros((self.states_size, self.states_size))
         for i in range(self.states_size):
             for j in range(self.states_size):
                 for k in range(length - 1):
                     new_trans[i][j] += state_trans_cube[k][i][j]
-        HMM.normalizeMatrix(new_trans)
+        HMM.normalize(new_trans)
 
         new_emit = np.zeros((self.states_size, self.observations_size))
         for i in range(self.states_size):
@@ -168,10 +185,10 @@ class HMM:
                 for k in range(length):
                     if observations[k] == self.observations[j]:
                         new_emit[i][j] += matrix_c[k][i]
-        HMM.normalizeMatrix(new_emit)
+        HMM.normalize(new_emit)
 
-        self.model_list.append(HMM.createModel(matrix_c[0], new_trans, new_emit))
-        self.model_list_index += 1
+        self.addModel(HMM.createModel(matrix_c[0], new_trans, new_emit))
+
 
     def printModel(self):
         print 'States:', self.states
@@ -186,6 +203,7 @@ class HMM:
             print each['emit']
             print '---------------------'
 
+
     @staticmethod
     def extractFlagStr(flag_str):
         flag_dict = {}
@@ -198,47 +216,148 @@ class HMM:
         obj += 3
 
     @staticmethod
-    def normalize(vector):
-        total = np.sum(vector)
-        if total != 0:
-            length = len(vector)
-            for i in range(length):
-                vector[i] /= total
-        # else:
-        #     for i in range(length):
-        #         vector[i] = 1.0 / length
+    def normalize(matrix):
+        if len(matrix) != 0:
+            ele_type = type(matrix[0])
+            if ele_type is not list and ele_type is not np.ndarray:
+                total = np.sum(matrix)
+                if total != 0:
+                    for i in range(len(matrix)):
+                        matrix[i] /= total
+            else:
+                for each in matrix:
+                    HMM.normalize(each)
+        return matrix
+
+class CombinationHMM(HMM):
+
+    def __init__(self, state_segment_list, observation_segment_list):
+        HMM.__init__(self, CombinationHMM.generatePermutation(state_segment_list), CombinationHMM.generatePermutation(observation_segment_list))
+        self.flag_size = len(state_segment_list)
+
+    def initWithFunction(self, init_func, trans_func, emit_func):
+        self.addModel(
+            HMM.createModel(
+                self.generateInitMatrix(init_func),
+                self.generateTransMatrix(trans_func),
+                self.generateEmitMatrix(emit_func),
+            )
+        )
 
     @staticmethod
-    def normalizeMatrix(matrix):
-        for each in matrix:
-            HMM.normalize(each)
+    def generatePermutationRec(flag_list, flag_str, flag_segment_list, index):
+        if len(flag_segment_list) == index:
+            flag_list.append(flag_str)
+        else:
+            for each in flag_segment_list[index]:
+                flag_str += each
+                CombinationHMM.generatePermutationRec(flag_list, flag_str, flag_segment_list, index + 1)
+                flag_str = flag_str[:-1]
 
     @staticmethod
-    def normalizeCube(cube):
-        for each in cube:
-            HMM.normalizeMatrix(each)
+    def generatePermutation(flag_segment_list):
+        flag_list = []
+        flag_str = ''
+        CombinationHMM.generatePermutationRec(flag_list, flag_str, flag_segment_list, 0)
+        return flag_list
+
+    def generateInitMatrix(self, init_func):
+        init_matrix = np.zeros(self.states_size)
+        for i in range(self.states_size):
+            init_matrix[i] = init_func(self.states[i])
+        return HMM.normalize(init_matrix)
+
+    def generateTransMatrix(self, trans_func):
+        trans_matrix = np.zeros((self.states_size, self.states_size))
+        for i in range(self.states_size):
+            for j in range(self.states_size):
+                trans_matrix[i, j] = trans_func(self.states[i], self.states[j])
+        return HMM.normalize(trans_matrix)
+
+    def generateEmitMatrix(self, emit_func):
+        emit_matrix = np.zeros((self.states_size, self.observations_size))
+        for i in range(self.states_size):
+            for j in range(self.observations_size):
+                emit_matrix[i, j] = emit_func(self.states[i], self.observations[j])
+        return HMM.normalize(emit_matrix)
+
+    def decode(self, observations):
+        decode_str = HMM.decode(self, observations)
+        return [decode_str[i:i + self.flag_size] for i in range(0, len(decode_str), self.flag_size)]
 
 if __name__ == '__main__':
+
+    ###############
+    # HMM Testing #
+    ###############
+
     hmm = HMM('-o', '._o')
 
-    # initializing with setting parameters
+    # Initializing with setting parameters
+
     # hmm.initWithSetting(
     #     [0.5, 0.5],
     #     [[0.9, 0.1], [0.1, 0.9]],
     #     [[1, 1, 1], [1, 1, 1]],
-    #     )
-    # or with train data
-    hmm.initWithData(['------ooooooooo------'], ['...___ooo___ooo___...'])
+    # )
 
-    # decode
+    # or with train data.
+    hmm.initWithData(
+        ['------ooooooooo------'],
+        ['...___ooo___ooo___...'],
+    )
+
+    # Decode
     print hmm.decode('._._._._ooooo_._ooooo_._._._.')
 
-    # polish
+    # Polish
     hmm.polish('._._._._ooooo_._ooooo_._._._.')
     print hmm.decode('._._._._ooooo_._ooooo_._._._.')
 
-    # print the mode
+    # Print the mode
     hmm.printModel()
 
-    # predict
-    # print hmm.predict('._._._._ooooo_._ooooo_._._._.', 2)
+    # Predict
+    print hmm.predict('._._._._ooooo_._ooooo_._._._.', 2)
+
+    ##########################
+    # CombinationHMM Testing #
+    ##########################
+
+    combination_hmm = CombinationHMM(
+        ['-o', '12', '12'],
+        ['._o', '12', '12'],
+    )
+
+    def init_func(state):
+        return 1
+
+    def trans_func(state_before, state_after):
+        prob = 1
+        for i in range(3):
+            prob *= (0.9 - 0.1 * i) if state_before[i] == state_after[i] else 0.1 * (i + 1)
+        return prob
+
+    def emit_func(state, observation):
+        prob = 100 if state[0] == observation[0] else 1
+        prob *= 1 - np.sum([math.fabs(int(state[i]) - int(observation[i])) for i in range(1, 3)]) * 0.4
+        return prob
+
+    # Initializing with functions above.
+    combination_hmm.initWithFunction(init_func, trans_func, emit_func)
+
+    # Print the mode
+    combination_hmm.printModel()
+
+    # Decode
+    print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
+
+    # Polish
+    combination_hmm.polish(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
+    print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
+
+    # Print the mode
+    combination_hmm.printModel()
+
+    # Predict
+    print combination_hmm.predict(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'], 2)
