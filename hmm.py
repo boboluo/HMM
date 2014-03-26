@@ -273,9 +273,9 @@ class CombinationHMM(HMM):
         CombinationHMM.generatePermutationRec(flag_list, flag_str, flag_segment_list, 0)
         return flag_list
 
-    def decode(self, observations):
+    def decode(self, observations, flag_index = None):
         decode_str = HMM.decode(self, observations)
-        return [decode_str[i:i + self.flag_size] for i in range(0, len(decode_str), self.flag_size)]
+        return [decode_str[i:i + self.flag_size] for i in range(0, len(decode_str), self.flag_size)] if flag_index == None else ''.join([decode_str[i] for i in range(flag_index, len(decode_str), self.flag_size)]) if flag_index < self.flag_size else None
 
 if __name__ == '__main__':
 
@@ -358,10 +358,10 @@ if __name__ == '__main__':
     # Polish
     combination_hmm.polish(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
     print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
+    print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'], 1)
 
     # Print the mode
     combination_hmm.printModel()
 
     # Predict
     print combination_hmm.predict(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'], 2)
-
