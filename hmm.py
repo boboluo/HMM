@@ -364,3 +364,4 @@ if __name__ == '__main__':
 
     # Predict
     print combination_hmm.predict(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'], 2)
+
