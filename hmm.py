@@ -149,15 +149,21 @@ class HMM:
             prob = prob_next
         return self.states[np.argmax(prob)]
 
-    def decode(self, observations):
+    def decode(self, observations, state = None):
         model = self.getCurrentModel()
         state_prob = []
         state_decode = []
-        for state_idx in range(self.states_size):
-            state_prob.append(model['init'][state_idx] * model['emit'][state_idx][self.observations_dict[observations[0]]])
-            state_decode.append(self.states[state_idx])
+        observations_begin = 1
+        if None == state or len(state) == 0:
+            for state_idx in range(self.states_size):
+                state_prob.append(model['init'][state_idx] * model['emit'][state_idx][self.observations_dict[observations[0]]])
+                state_decode.append(self.states[state_idx])
+        else:
+            state_prob = state[0]
+            state_decode = state[1]
+            observations_begin = 0
         HMM.normalize(state_prob)
-        for each_obs in observations[1:]:
+        for each_obs in observations[observations_begin:]:
             state_prob_next = []
             state_decode_next = []
             for to_state in range(self.states_size):
@@ -174,8 +180,11 @@ class HMM:
             state_prob = state_prob_next
             state_decode = state_decode_next
             HMM.normalize(state_prob)
+        if type(state) == list:
+            del state[0:len(state)]
+            state.append(state_prob)
+            state.append(state_decode)
         return state_decode[np.argmax(state_prob)]
-
 
     def polish(self, observations):
         model = self.getCurrentModel()
@@ -273,8 +282,8 @@ class CombinationHMM(HMM):
         CombinationHMM.generatePermutationRec(flag_list, flag_str, flag_segment_list, 0)
         return flag_list
 
-    def decode(self, observations, flag_index = None):
-        decode_str = HMM.decode(self, observations)
+    def decode(self, observations, state = None, flag_index = None):
+        decode_str = HMM.decode(self, observations, state = state)
         return [decode_str[i:i + self.flag_size] for i in range(0, len(decode_str), self.flag_size)] if flag_index == None else ''.join([decode_str[i] for i in range(flag_index, len(decode_str), self.flag_size)]) if flag_index < self.flag_size else None
 
 if __name__ == '__main__':
@@ -293,35 +302,45 @@ if __name__ == '__main__':
     # )
 
     # or with train data
-    # hmm.addModelViaData(
-    #     ['------ooooooooo------'],
-    #     ['...___ooo___ooo___...'],
-    # )
+    hmm.addModelViaData(
+        ['------ooooooooo------'],
+        ['...___ooo___ooo___...'],
+    )
 
     # or with function
-    def init_func(state):
-        return 1
+    # def init_func(state):
+    #     return 1
 
-    def trans_func(state, observation):
-        return 9 if state == observation else 1
+    # def trans_func(state, observation):
+    #     return 9 if state == observation else 1
 
-    def emit_func(state, observation):
-        return 1
+    # def emit_func(state, observation):
+    #     return 1
 
-    hmm.addModelViaFunction(init_func, trans_func, emit_func)
+    # hmm.addModelViaFunction(init_func, trans_func, emit_func)
 
     # Decode
     print hmm.decode('._._._._ooooo_._ooooo_._._._.')
 
     # Polish
-    hmm.polish('._._._._ooooo_._ooooo_._._._.')
-    print hmm.decode('._._._._ooooo_._ooooo_._._._.')
+    # hmm.polish('._._._._ooooo_._ooooo_._._._.')
+    # print hmm.decode('._._._._ooooo_._ooooo_._._._.')
 
     # Print the mode
     hmm.printModel()
 
     # Predict
     print hmm.predict('._._._._ooooo_._ooooo_._._._.', 2)
+
+    # Continuous
+    print
+    print 'Test Continuous:'
+    print hmm.decode('._._._._ooooo_._')
+    print hmm.decode('ooooo_._._._.')
+    state = []
+    print hmm.decode('._._._._ooooo_._', state = state)
+    print hmm.decode('ooooo_._._._.', state = state)
+    print
 
     ##########################
     # CombinationHMM Testing #
@@ -358,7 +377,7 @@ if __name__ == '__main__':
     # Polish
     combination_hmm.polish(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
     print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'])
-    print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'], 1)
+    print combination_hmm.decode(['.11', '_22', 'o21', 'o22', '_21', 'o22', 'o11', '_12', '.11'], flag_index = 1)
 
     # Print the mode
     combination_hmm.printModel()
